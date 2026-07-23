@@ -97,7 +97,7 @@ def add_to_vault(
     
     if not db_path.exists():
         raise DbNotExistent("Database doesn't exists, try using the 'create-vault' command first.")
-    
+
     connection: Connection = create_database(vault_name, db_path)
 
     cur: Cursor = connection.cursor()

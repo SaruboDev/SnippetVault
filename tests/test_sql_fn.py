@@ -12,6 +12,10 @@ def fake_db_path(tmp_path):
     fake_dir.mkdir()
     return fake_dir
 
+@pt.fixture()
+def new_db(fake_db_path):
+    sql_fn.create_database("test", fake_db_path / "database.db")
+
 def test_check_and_create_db(fake_db_path):
     response = sql_fn.check_or_create_database("test", fake_db_path)
     if response is False:
@@ -22,7 +26,7 @@ def test_check_and_create_db(fake_db_path):
     assert pl.Path(fake_db_path / "database.db").exists()
     reply.close()
 
-def test_add_snippet(fake_db_path):
+def test_add_snippet(fake_db_path, new_db):
     sql_fn.add_to_vault(
         "test", "snippet test", "description test", "python", fake_db_path
     )

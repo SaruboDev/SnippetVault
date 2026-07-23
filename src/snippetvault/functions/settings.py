@@ -109,7 +109,7 @@ def read_settings_file(key_name: str | None, file_path: Path|None = None, db_pat
 
     match key_name:
         case "database_path":
-            result = doc["general"]["database_path"]
+            result = Path(doc["general"]["database_path"])
         case _:
             return file_path_settings.read_text(encoding = "utf-8")
 
@@ -138,7 +138,7 @@ def change_settings(value: Any, key_name: str|None = None, file_path: Path|None 
     old_path: Path|None = None
     if key_name == "database_path":
         old_path = Path(doc["general"]["database_path"])
-        doc["general"]["database_path"] = value
+        doc["general"]["database_path"] = str(value)
     ## NOTE: Add new keys if necessary.
 
     file_path_settings.write_text(dumps(doc), encoding = "utf-8")

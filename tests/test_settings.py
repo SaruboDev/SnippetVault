@@ -24,7 +24,7 @@ def test_check_and_create_settings(fake_settings_path) -> None:
     )
 
     assert response == True
-    fake_dir_settings = fake_settings_path / "settings.toml"
+    fake_dir_settings = fake_settings_path / "config.toml"
     assert fake_dir_settings.exists()
 
 
