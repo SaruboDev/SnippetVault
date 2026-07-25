@@ -24,21 +24,22 @@ Made in python with SQLite.
 ## I want to try!
 It's still a WIP, but you can try it by:
 1. Clone the repository: `git clone https://github.com/SaruboDev/SnippetVault`
-2. Sync the dependencies: `uv sync`
-3. Use `uv run python cli.py --help` to see all possible commands!
+2. With your terminal, go in the root folder of the project.
+3. Sync the dependencies: `uv sync`
+4. Use `uv run snippetvault --help` to see all possible commands!
 
 ### Start guide!
 Create your vault!
 ```bash
-uv run python cli.py create-vault custom-vault-name
+uv run snippetvault create-vault custom-vault-name
 ```
 Add your snippet!
 ```bash
-uv run python cli.py add-snippet custom-vault-name "snippet name" "I'm the snippet description!" tag1 tag2 tagN
+uv run snippetvault add-snippet custom-vault-name "snippet name" "I'm the snippet description!" tag1 tag2 tagN
 ```
 Show all snippets (with option to add `--list-db-tables` to show all avaiable vaults)
 ```bash
-uv run python cli.py see-vault custom-vault-name
+uv run snippetvault see-vault custom-vault-name
 ```
 ## Future Updates
 If you want to suggest more features or tell me about bugs/other, feel free to open pull requests or issues!
