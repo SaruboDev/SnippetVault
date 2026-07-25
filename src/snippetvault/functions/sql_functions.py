@@ -16,6 +16,15 @@ class TableNameErr(Exception):
 class DbNotExistent(Exception):
     pass
 
+def check_table_security(name: str) -> bool:
+    """
+    Quick regex filter.
+    """
+
+    if not re.match("^[a-zA-Z0-9_]+$", name):
+        raise TableNameErr("Table name not valid or unsafe!")
+    return True
+
 def create_database(name: str, db_path: Path|None = None) -> Connection:
     """
     Creates a new database and the tables required.    
@@ -32,8 +41,7 @@ def create_database(name: str, db_path: Path|None = None) -> Connection:
     cur: Cursor = connection.cursor()
     cur.execute("PRAGMA foreign_keys = ON;")
     
-    if not re.match("^[a-zA-Z0-9_]+$", name):
-        raise TableNameErr("Table name not valid or unsafe!")
+    check_table_security(name)
     
     cur.execute(f"CREATE TABLE IF NOT EXISTS {name} (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, description TEXT, timedate TEXT DEFAULT CURRENT_TIMESTAMP)")
     
@@ -49,19 +57,21 @@ def create_database(name: str, db_path: Path|None = None) -> Connection:
 
     return connection
 
-def check_or_create_database(name: str, db_path: Path|None = None) -> bool:
-    """
-    Checks if the database already exists, otherwise, asks if it should create a new one.
-
-    NOTE: Fix line 66, even if the file exists, it needs to ask if you want to create a new TABLE, not databaes.
-    """
-
+def get_full_db_path(db_path: Path|None = None):
     if db_path is None:
         result = settings.read_settings_file("database_path")
 
         db_path = Path(result)
     
     db_path_full = db_path / "database.db"
+    return db_path_full
+
+def check_or_create_database(name: str, db_path: Path|None = None) -> bool:
+    """
+    Checks if the database already exists, otherwise, asks if it should create a new one.
+    """
+    db_path_full = get_full_db_path(db_path)
+    check_table_security(name)
 
     if os.path.exists(db_path_full):
         connection = sqlite3.connect(db_path_full)
@@ -73,7 +83,6 @@ def check_or_create_database(name: str, db_path: Path|None = None) -> bool:
 
         if not name in table_list_flat:
             return False
-        # create_database(name)
         return True
     else:
         return False
@@ -88,12 +97,11 @@ def add_to_vault(
     """
     Adds new snippets to the vault.
     """
-    result = settings.read_settings_file("database_path")
+    if check_or_create_database(vault_name, db_path) == False:
+        raise DbNotExistent("Database or table doesn't exists.")
 
-    if db_path is None:
-        db_path: Path = Path(result)
-    
-    db_path =  db_path / "database.db"
+    db_path = get_full_db_path(db_path)
+    check_table_security(vault_name)
     
     if not db_path.exists():
         raise DbNotExistent("Database doesn't exists, try using the 'create-vault' command first.")
@@ -113,3 +121,52 @@ def add_to_vault(
     connection.commit()
     connection.close()
     return
+
+def search_in_vault(
+        vault_name: str,
+        snippet_or_tag: str,
+        is_tag: bool = False,
+        db_path: Path|None = None
+):
+    check_or_create_database(vault_name, db_path)
+
+    db_path = get_full_db_path(db_path)
+    check_table_security(vault_name)
+
+    if not db_path.exists():
+        raise DbNotExistent("Database doesn't exists, try using the 'create-vault' command first.")
+
+    if not is_tag:
+        connection: Connection = create_database(vault_name, db_path)
+        
+        cur: Cursor = connection.cursor()
+
+        cur.execute(f"""
+        SELECT t.name, t.description, ts.tag FROM "{vault_name}" AS t
+        LEFT JOIN "{vault_name}_tags" AS ts ON t.id = ts.element_id
+        WHERE t.name = ?;
+        """, (snippet_or_tag, )
+        )
+        results = cur.fetchall()
+
+        connection.close()
+
+        return results
+
+    # Else, they're searching by tags
+
+    connection: Connection = create_database(vault_name, db_path)
+    
+    cur: Cursor = connection.cursor()
+
+    cur.execute(f"""
+    SELECT t.name, t.description, ts.tag FROM '{vault_name}' AS t
+    LEFT JOIN {vault_name}_tags AS ts ON t.id = ts.element_id
+    WHERE ts.tag = ?;
+    """, (snippet_or_tag, )
+    )
+    results = cur.fetchall()
+
+    connection.close()
+
+    return results
