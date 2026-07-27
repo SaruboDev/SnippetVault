@@ -28,11 +28,46 @@ def test_check_and_create_db(fake_db_path):
 
 def test_add_snippet(fake_db_path, new_db):
     sql_fn.add_to_vault(
-        "test", "snippet test", "description test", "python", fake_db_path
+        "test", "snippet test", "description test", ["python"], fake_db_path
     )
 
+    ## Check if it actually added the snippet.
     connection = sql_fn.create_database("test", fake_db_path)
     cur = connection.cursor()
-    cur.execute("SELECT * FROM test")
+    cur.execute("SELECT t.name, t.description, tt.tag FROM test AS t LEFT JOIN test_tags AS tt ON t.id = tt.element_id")
     rows = cur.fetchall()
+
+    assert rows == [("snippet test", "description test", "python")]
     connection.close()
+
+def test_search_in_vault(fake_db_path, new_db):
+    sql_fn.add_to_vault(
+        "test",
+        "snippet test",
+        "description test",
+        ["test_tag"],
+        fake_db_path
+    )
+    sql_fn.add_to_vault(
+        "test",
+        "snippet test 2",
+        "description test",
+        ["test_tag"],
+        fake_db_path
+    )
+
+    no_tag_res = sql_fn.search_in_vault(
+        "test",
+        "snippet test",
+        False,
+        fake_db_path
+    )
+    yes_tag_res = sql_fn.search_in_vault(
+        "test",
+        "test_tag",
+        True,
+        fake_db_path
+    )
+
+    assert no_tag_res == [("snippet test", "description test", "test_tag")]
+    assert yes_tag_res == [("snippet test", "description test", "test_tag"), ("snippet test 2", "description test", "test_tag")]
