@@ -44,6 +44,6 @@ uv run snippetvault see-vault custom-vault-name
 ## Future Updates
 If you want to suggest more features or tell me about bugs/other, feel free to open pull requests or issues!
 - [ ] Turn it into a downloadable package for pip or as an installer.
-- [ ] Add name and tags search.
+- [X] Add name and tags search.
 - [ ] Add possibility to remove a snippet.
 - [ ] Add possibility to remove a vault.
