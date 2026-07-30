@@ -1,9 +1,5 @@
 import sqlite3
 from sqlite3 import Connection, Cursor
-
-import typer
-
-from rich import print
 import os
 import re
 from pathlib import Path

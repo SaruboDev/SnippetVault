@@ -8,7 +8,6 @@ import platform
 import os
 from pathlib import Path
 
-import typer
 from typing import Any
 
 class KeyNameErr(Exception):
