@@ -92,12 +92,12 @@ def search(
         err_console.print(str(e))
         raise typer.Exit(code = 1)
 
-
 @app.command()
 def see_vault(
     vault_name: Optional[str] = typer.Argument(None, help="Name of the vault (optional)"),
     list_db_tables: bool = False
 ):
+    ## NOTE: This was beta, but it's useful, so remember to turn this into a SQL_FN function, and also test it.
     connection = None
     try:
         if vault_name is None and list_db_tables == False:
