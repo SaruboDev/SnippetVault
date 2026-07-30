@@ -217,6 +217,9 @@ def remove_vault(
     """
     Deletes a vault or/and its contents forever.
     """
+    if vault_name is None:
+        raise NoOptions("Vault Name not given.")
+
     if not database_exists(vault_name, db_path):
         raise DbNotExistent("Database or vault doesn't exists.")
 
@@ -245,3 +248,37 @@ def remove_vault(
     connection.commit()
     connection.close()
 
+def delete_snippet(vault_name: str, snippet_or_tag_name: str, is_tag: bool = False, db_path: Path|None = None):
+    """
+    Removes the snippet from the vault.
+    """
+    if vault_name is None or snippet_or_tag_name is None:
+        raise NoOptions("Vault Name or Snippet/Tag not given.")
+
+    if not database_exists(vault_name, db_path):
+        raise DbNotExistent("Database or vault doesn't exists.")
+
+    if not check_table_security(vault_name):
+        raise TableNameErr(f"Table called {vault_name} is not secure, and probably doesn't even exists, but somehow you got here.")
+
+    connection = connect_or_create_database(vault_name, db_path)
+    cur = connection.cursor()
+    cur.execute("PRAGMA foreign_keys = ON;")
+
+    if not is_tag:
+        cur.execute(
+            f"""
+            DELETE FROM {vault_name} WHERE name == ?;
+            """, (snippet_or_tag_name, )
+        )
+    else:
+        cur.execute(
+            f"""
+            DELETE FROM {vault_name} WHERE id IN (
+                SELECT element_id FROM {vault_name}_tags WHERE tag = ?
+            )
+            """, (snippet_or_tag_name,)
+        )
+
+    connection.commit()
+    connection.close()

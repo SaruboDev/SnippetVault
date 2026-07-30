@@ -128,3 +128,46 @@ def test_delete_table(
     result = sql_fn.database_exists("test", fake_db_path)
 
     assert result == expected
+
+@pt.mark.parametrize(
+        "is_tag, snippet_or_tag_name, expected",
+        [
+            (False, "snippet test", []),
+            (True, "test_tag", [])
+        ]
+)
+def test_delete_snippet(
+        fake_db_path,
+        new_db,
+        is_tag: bool,
+        snippet_or_tag_name: str,
+        expected
+):
+    sql_fn.add_to_vault(
+        "test",
+        "snippet test",
+        "description test",
+        ["test_tag"],
+        fake_db_path
+    )
+
+    sql_fn.delete_snippet(
+        "test",
+        snippet_or_tag_name,
+        is_tag,
+        fake_db_path
+    )
+
+    results = sql_fn.see_vault(
+        "test",
+        fake_db_path,
+        False
+    )
+    connection = sql_fn.connect_or_create_database("test", fake_db_path)
+    cur = connection.cursor()
+    cur.execute("SELECT * FROM test_tags;")
+    results_tags = cur.fetchall()
+    connection.close()
+
+    assert results == expected
+    assert results_tags == expected

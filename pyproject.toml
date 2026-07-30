@@ -1,6 +1,6 @@
 [project]
 name = "snippetvault"
-version = "1.0.0"
+version = "0.8.0"
 description = "A CLI tool to store your thoughts and notes."
 readme = "README.md"
 authors = [

@@ -162,6 +162,24 @@ def remove_vault(
         raise typer.Exit(code = 1)
 
 @app.command()
+def delete_snippet(
+    vault_name: str,
+    snippet_or_tag_name: str,
+    is_tag: bool = False
+):
+    """
+    Removes the snippet from the vault.
+    """
+    try:
+        sql_fn.delete_snippet(vault_name, snippet_or_tag_name, is_tag)
+        out_console.print("Done.")
+        raise typer.Exit(code = 0)
+
+    except (sql_fn.TableNameErr, sql_fn.DbNotExistent, sql_fn.NoOptions) as e:
+        err_console.print(str(e))
+        raise typer.Exit(code = 1)
+
+@app.command()
 def change_settings(settings_name: str, new_value) -> None:
     """
     Changes any specified settings.
