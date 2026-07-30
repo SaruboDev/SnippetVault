@@ -19,23 +19,19 @@ err_console = Console(stderr=True)
 out_console = Console(stderr=False)
 
 @app.command()
-def create_vault(name: Annotated[str, typer.Argument()] = "standard_vault") -> None:
+def create_vault(vault_name: Annotated[str, typer.Argument()] = "standard_vault") -> None:
     """
     Creates a new vault to store whatever you want.
     """
     try:
-        # if sql_fn.check_or_create_database(name) == True:
-        #     out_console.print(f"Database called {name} already exists. Closing.")
-        #     raise typer.Exit(code = 0)
-
-        if sql_fn.check_or_create_database(name) == False:
+        if sql_fn.database_exists(vault_name) == False:
             out_console.print(
-                f"Database [bold #687396]{name} [/bold #687396] doesn't exist."
+                f"Database [bold #687396]{vault_name} [/bold #687396] doesn't exist."
             )
 
             reply: bool = typer.confirm("Want to create a new one?")
             if reply:
-                connection = sql_fn.create_database(name)
+                connection = sql_fn.connect_or_create_database(vault_name)
                 connection.close()
                 out_console.print("Done!")
                 raise typer.Exit(code = 0)
@@ -133,6 +129,35 @@ def see_vault(
         raise typer.Exit(code = 0)
 
     except (sql_fn.TableNameErr, sql_fn.DbNotExistent, sql_fn.NoOptions) as e:
+        err_console.print(str(e))
+        raise typer.Exit(code = 1)
+
+@app.command()
+def remove_vault(
+    vault_name: str,
+    just_entries: bool = False
+):
+    """
+    Deletes a vault or/and its contents forever.
+    """
+    try:
+        if not just_entries:
+            reply: bool = typer.confirm(
+                f"Database {vault_name} and {vault_name}_tags will be [bold #d42619]removed along with its contents[/bold #d42619] forever, continue?"
+            )
+        else:
+            reply: bool = typer.confirm(
+                f"All contents inside {vault_name} and {vault_name}_tags will be [bold #d42619]removed[/bold #d42619] forever, continue?"
+            )
+        if reply:
+            sql_fn.remove_vault(vault_name, None, just_entries)
+            out_console.print("Done.")
+        else:
+            out_console.print("Canceled.")
+        
+        raise typer.Exit(code = 0)
+
+    except (sql_fn.TableNameErr, sql_fn.DbNotExistent) as e:
         err_console.print(str(e))
         raise typer.Exit(code = 1)
 

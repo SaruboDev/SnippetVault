@@ -28,21 +28,15 @@ def check_table_security(name: str) -> bool:
         raise TableNameErr("Table name not valid or unsafe!")
     return True
 
-def create_database(name: str, db_path: Path|None = None) -> Connection:
+def connect_or_create_database(name: str, db_path: Path|None = None) -> Connection:
     """
-    Creates a new database and the tables required.    
+    Creates a new database and the tables required or connects to an existing one.    
     """
-    if db_path is None:
-        db_path = Path(settings.read_settings_file("database_path"))
-
-    if not str(db_path).endswith("database.db"):
-        full_path = db_path / "database.db"
-    else:
-        full_path = db_path
+    full_path = get_full_db_path(db_path)
 
     connection: Connection = sqlite3.connect(full_path)
     cur: Cursor = connection.cursor()
-    cur.execute("PRAGMA foreign_keys = ON;")
+    cur.execute("PRAGMA foreign_keys = ON;") ## NOTE: Mettilo ad ogni connessione
     
     check_table_security(name)
     
@@ -65,11 +59,15 @@ def get_full_db_path(db_path: Path|None = None):
         result = settings.read_settings_file("database_path")
 
         db_path = Path(result)
-    
-    db_path_full = db_path / "database.db"
+
+    if not str(db_path).endswith("database.db"):
+        db_path_full = db_path / "database.db"
+    else:
+        db_path_full = db_path
+
     return db_path_full
 
-def check_or_create_database(name: str, db_path: Path|None = None) -> bool:
+def database_exists(name: str, db_path: Path|None = None) -> bool:
     """
     Checks if the database already exists, otherwise, asks if it should create a new one.
     """
@@ -79,12 +77,15 @@ def check_or_create_database(name: str, db_path: Path|None = None) -> bool:
     if os.path.exists(db_path_full):
         connection = sqlite3.connect(db_path_full)
         cur = connection.cursor()
+        cur.execute("PRAGMA foreign_keys = ON;")
         cur.execute(f"SELECT name FROM sqlite_master WHERE type='table';")
 
         table_list = cur.fetchall()
         table_list_flat = [item[0] for item in table_list]
 
-        if not name in table_list_flat:
+        name_tags = name + "_tags"
+
+        if not name in table_list_flat or not name_tags in table_list_flat:
             return False
         return True
     else:
@@ -100,7 +101,7 @@ def add_to_vault(
     """
     Adds new snippets to the vault.
     """
-    if check_or_create_database(vault_name, db_path) == False:
+    if database_exists(vault_name, db_path) == False:
         raise DbNotExistent("Database or table doesn't exists.")
 
     db_path = get_full_db_path(db_path)
@@ -109,9 +110,10 @@ def add_to_vault(
     if not db_path.exists():
         raise DbNotExistent("Database doesn't exists, try using the 'create-vault' command first.")
 
-    connection: Connection = create_database(vault_name, db_path)
+    connection: Connection = connect_or_create_database(vault_name, db_path)
 
     cur: Cursor = connection.cursor()
+    cur.execute("PRAGMA foreign_keys = ON;")
 
     cur.execute(f"INSERT INTO {vault_name} (name, description) VALUES(?, ?)", (snippet_name, description))
     last_id = cur.lastrowid
@@ -131,7 +133,9 @@ def search_in_vault(
         is_tag: bool = False,
         db_path: Path|None = None
 ):
-    check_or_create_database(vault_name, db_path)
+    exists = database_exists(vault_name, db_path)
+    if not exists:
+        raise DbNotExistent("Database or Vault doesn't exist.")
 
     db_path = get_full_db_path(db_path)
     check_table_security(vault_name)
@@ -140,9 +144,10 @@ def search_in_vault(
         raise DbNotExistent("Database doesn't exists, try using the 'create-vault' command first.")
 
     if not is_tag:
-        connection: Connection = create_database(vault_name, db_path)
+        connection: Connection = connect_or_create_database(vault_name, db_path)
         
         cur: Cursor = connection.cursor()
+        cur.execute("PRAGMA foreign_keys = ON;")
 
         cur.execute(f"""
         SELECT t.name, t.description, ts.tag FROM "{vault_name}" AS t
@@ -158,9 +163,10 @@ def search_in_vault(
 
     # Else, they're searching by tags
 
-    connection: Connection = create_database(vault_name, db_path)
+    connection: Connection = connect_or_create_database(vault_name, db_path)
     
     cur: Cursor = connection.cursor()
+    cur.execute("PRAGMA foreign_keys = ON;")
 
     cur.execute(f"""
     SELECT t.name, t.description, ts.tag FROM '{vault_name}' AS t
@@ -183,12 +189,15 @@ def see_vault(vault_name: str|None, db_path: Path|None = None, list_db_tables: b
         raise NoOptions("Didn't receive neither a vault-name nor is list-db-tables enabled.")
 
     if vault_name:
-        connection = create_database(vault_name, db_path)
+        if not database_exists(vault_name, db_path):
+            raise DbNotExistent("Database or table doesn't exist.")
+        connection = connect_or_create_database(vault_name, db_path)
     else:
         db_path = get_full_db_path(db_path)
         connection = sqlite3.connect(db_path)
 
     cur = connection.cursor()
+    cur.execute("PRAGMA foreign_keys = ON;")
 
     if not list_db_tables:
         cur.execute(f"SELECT vn.name, vn.description, vn.timedate, st.tag FROM {vault_name} AS vn LEFT JOIN {vault_name}_tags AS st ON vn.id == st.element_id;")
@@ -199,3 +208,40 @@ def see_vault(vault_name: str|None, db_path: Path|None = None, list_db_tables: b
     connection.close()
 
     return result
+
+def remove_vault(
+        vault_name: str,
+        db_path: Path|None = None,
+        just_entries: bool = False
+):
+    """
+    Deletes a vault or/and its contents forever.
+    """
+    if not database_exists(vault_name, db_path):
+        raise DbNotExistent("Database or vault doesn't exists.")
+
+    connection = connect_or_create_database(vault_name, db_path)
+    cur = connection.cursor()
+    cur.execute("PRAGMA foreign_keys = ON;")
+
+    if not check_table_security(vault_name):
+        raise TableNameErr(f"Table called {vault_name} is not secure, and probably doesn't even exists, but somehow you got here.")
+
+    if not just_entries:
+        cur.execute(
+            f"DROP TABLE IF EXISTS {vault_name};"
+        )
+        cur.execute(
+            f"DROP TABLE IF EXISTS {vault_name}_tags;"
+        )
+    else:
+        cur.execute(
+            f"DELETE FROM {vault_name};"
+        )
+        cur.execute(
+            f"DELETE FROM {vault_name}_tags;"
+        )
+
+    connection.commit()
+    connection.close()
+

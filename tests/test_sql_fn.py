@@ -14,12 +14,12 @@ def fake_db_path(tmp_path):
 
 @pt.fixture()
 def new_db(fake_db_path):
-    sql_fn.create_database("test", fake_db_path / "database.db")
+    sql_fn.connect_or_create_database("test", fake_db_path / "database.db")
 
 def test_check_and_create_db(fake_db_path):
-    response = sql_fn.check_or_create_database("test", fake_db_path)
+    response = sql_fn.database_exists("test", fake_db_path)
     if response is False:
-        reply = sql_fn.create_database("test", fake_db_path)
+        reply = sql_fn.connect_or_create_database("test", fake_db_path)
 
     assert isinstance(reply, Connection)
 
@@ -32,7 +32,7 @@ def test_add_snippet(fake_db_path, new_db):
     )
 
     ## Check if it actually added the snippet.
-    connection = sql_fn.create_database("test", fake_db_path)
+    connection = sql_fn.connect_or_create_database("test", fake_db_path)
     cur = connection.cursor()
     cur.execute("SELECT t.name, t.description, tt.tag FROM test AS t LEFT JOIN test_tags AS tt ON t.id = tt.element_id")
     rows = cur.fetchall()
@@ -103,3 +103,28 @@ def test_see_vaults(
 
     assert results == expected
 
+@pt.mark.parametrize(
+        "just_entries, expected",
+        [
+            (True, True),
+            (False, False)
+        ]
+)
+def test_delete_table(
+    fake_db_path,
+    new_db,
+    just_entries: bool,
+    expected
+):
+    sql_fn.add_to_vault(
+        "test",
+        "snippet test",
+        "description test",
+        ["test_tag"],
+        fake_db_path
+    )
+    sql_fn.remove_vault("test", fake_db_path, just_entries)
+
+    result = sql_fn.database_exists("test", fake_db_path)
+
+    assert result == expected
