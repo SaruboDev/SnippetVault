@@ -97,25 +97,14 @@ def see_vault(
     vault_name: Optional[str] = typer.Argument(None, help="Name of the vault (optional)"),
     list_db_tables: bool = False
 ):
-    ## NOTE: This was beta, but it's useful, so remember to turn this into a SQL_FN function, and also test it.
-    connection = None
+    """
+    Let's you see every note in the specified vault.
+    If you don't specify a vault but insert '--list-db-tables' it will list all avaiable vaults in the database.
+    """
     try:
-        if vault_name is None and list_db_tables == False:
-            err_console.print("No vault name given!")
-            raise typer.Exit(code = 1)
-        
-        if vault_name:
-            connection = sql_fn.create_database(vault_name)
-        else:
-            path = Path(settings.read_settings_file("database_path"))
-            connection = sqlite3.connect(path / "database.db")
-        cur = connection.cursor()
+        results = sql_fn.see_vault(vault_name, None, list_db_tables)
 
         if not list_db_tables:
-            ## NOTE: May do it in the sql_fn script so i can also test it, even if it's simple.
-            cur.execute(f"SELECT vn.name, vn.description, vn.timedate, st.tag FROM {vault_name} AS vn LEFT JOIN {vault_name}_tags AS st ON vn.id == st.element_id;")
-            results = cur.fetchall()
-
             table = Table()
             table.add_column("Snippet Name")
             table.add_column("Description")
@@ -132,9 +121,6 @@ def see_vault(
             
             out_console.print(table)
         else:
-            cur.execute(f"SELECT name FROM sqlite_master WHERE type='table';")
-            results = cur.fetchall()
-
             table = Table()
             table.add_column("Tables")
             for result in results:
@@ -144,16 +130,11 @@ def see_vault(
                 table.add_row(result)
 
             out_console.print(table)
-
         raise typer.Exit(code = 0)
 
-    except (sql_fn.TableNameErr, sql_fn.DbNotExistent) as e:
+    except (sql_fn.TableNameErr, sql_fn.DbNotExistent, sql_fn.NoOptions) as e:
         err_console.print(str(e))
         raise typer.Exit(code = 1)
-
-    finally:
-        if connection:
-            connection.close()
 
 @app.command()
 def change_settings(settings_name: str, new_value) -> None:

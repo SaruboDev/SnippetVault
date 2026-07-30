@@ -121,6 +121,10 @@ version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "tomlkit" },
+]
+
+[package.optional-dependencies]
+cli = [
     { name = "typer" },
 ]
 
@@ -132,8 +136,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "tomlkit", specifier = ">=0.15.1" },
-    { name = "typer", specifier = ">=0.27.0" },
+    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.27.0" },
 ]
+provides-extras = ["cli"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]

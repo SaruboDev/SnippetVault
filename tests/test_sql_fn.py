@@ -1,6 +1,6 @@
 from snippetvault.functions import sql_functions as sql_fn
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 import pytest as pt
 import pathlib as pl
 
@@ -71,3 +71,35 @@ def test_search_in_vault(fake_db_path, new_db):
 
     assert no_tag_res == [("snippet test", "description test", "test_tag")]
     assert yes_tag_res == [("snippet test", "description test", "test_tag"), ("snippet test 2", "description test", "test_tag")]
+
+@pt.mark.parametrize(
+        "vault_name, list_db_tables, expected",
+        [
+            ("test", False, [("snippet test", "description test", ANY, "test_tag")]),
+            (None, True, [("test",), ("sqlite_sequence",), ("test_tags",)]),
+            ("test", True, [("test",), ("sqlite_sequence",), ("test_tags",)])
+        ]
+)
+def test_see_vaults(
+    fake_db_path,
+    new_db,
+    vault_name: str|None,
+    list_db_tables: bool,
+    expected: list
+):
+    sql_fn.add_to_vault(
+        "test",
+        "snippet test",
+        "description test",
+        ["test_tag"],
+        fake_db_path
+    )
+
+    results = sql_fn.see_vault(
+        vault_name,
+        fake_db_path,
+        list_db_tables
+    )
+
+    assert results == expected
+

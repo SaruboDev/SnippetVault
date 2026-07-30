@@ -1,0 +1,32 @@
+name: "release-snippetvault"
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: write
+
+
+jobs:
+  run:
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install UV
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+      - name: Install Python
+        run: uv python install 3.14.3
+      - name: Build
+        run: uv build
+      - name: Test wheel 1
+        run: uv run --isolated --no-project --with dist/*.whl --with pytest pytest tests/
+      - name: Test source
+        run: uv run --isolated --no-project --with dist/*.tar.gz --with pytest pytest tests/
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

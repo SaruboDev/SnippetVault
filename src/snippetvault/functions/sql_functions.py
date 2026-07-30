@@ -16,6 +16,9 @@ class TableNameErr(Exception):
 class DbNotExistent(Exception):
     pass
 
+class NoOptions(Exception):
+    pass
+
 def check_table_security(name: str) -> bool:
     """
     Quick regex filter.
@@ -31,7 +34,7 @@ def create_database(name: str, db_path: Path|None = None) -> Connection:
     """
     if db_path is None:
         db_path = Path(settings.read_settings_file("database_path"))
-    
+
     if not str(db_path).endswith("database.db"):
         full_path = db_path / "database.db"
     else:
@@ -170,3 +173,29 @@ def search_in_vault(
     connection.close()
 
     return results
+
+def see_vault(vault_name: str|None, db_path: Path|None = None, list_db_tables: bool = False):
+    """
+    Prints all avaiable vaults in a specific database.
+    """
+
+    if vault_name is None and list_db_tables == False:
+        raise NoOptions("Didn't receive neither a vault-name nor is list-db-tables enabled.")
+
+    if vault_name:
+        connection = create_database(vault_name, db_path)
+    else:
+        db_path = get_full_db_path(db_path)
+        connection = sqlite3.connect(db_path)
+
+    cur = connection.cursor()
+
+    if not list_db_tables:
+        cur.execute(f"SELECT vn.name, vn.description, vn.timedate, st.tag FROM {vault_name} AS vn LEFT JOIN {vault_name}_tags AS st ON vn.id == st.element_id;")
+    else:
+        cur.execute(f"SELECT name FROM sqlite_master WHERE type='table';")
+    
+    result = cur.fetchall()
+    connection.close()
+
+    return result
