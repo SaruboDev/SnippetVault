@@ -32,7 +32,7 @@ def connect_or_create_database(name: str, db_path: Path|None = None) -> Connecti
 
     connection: Connection = sqlite3.connect(full_path)
     cur: Cursor = connection.cursor()
-    cur.execute("PRAGMA foreign_keys = ON;") ## NOTE: Mettilo ad ogni connessione
+    cur.execute("PRAGMA foreign_keys = ON;")
     
     check_table_security(name)
     
