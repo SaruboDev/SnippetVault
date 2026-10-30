@@ -48,4 +48,4 @@ If you want to suggest more features or tell me about bugs/other, feel free to o
 - [x] Add possibility to remove a snippet.
 - [x] Add possibility to remove a vault.
 - [ ] Add possibility to edit a snippet and/or it's tags.
-- [ ] Add possibility to export or import a vault.
+- [X] Add possibility to export or import a vault.
