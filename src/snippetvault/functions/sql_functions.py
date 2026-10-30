@@ -278,3 +278,124 @@ def delete_snippet(vault_name: str, snippet_or_tag_name: str, is_tag: bool = Fal
 
     connection.commit()
     connection.close()
+
+def import_database(database_path: str|Path, db_path: str|Path|None = None):
+    """
+    Imports into an existing database with the data from the specified one.
+    """
+    db_path = get_full_db_path(db_path)
+    database_path = Path(database_path)
+    if not database_path.is_file() or database_path.suffix != ".db": raise FileNotFoundError("'database_path' doesn't return the correct file.")
+
+    connection = sqlite3.connect(db_path)
+    conn_temp = sqlite3.connect(":memory:")
+
+    with open(database_path, "r") as f:
+        sql = f.read()
+        conn_temp.executescript(sql)
+
+    all_tables_names_import = conn_temp.execute(
+        """
+        SELECT name FROM sqlite_master WHERE type='table';
+        """
+    ).fetchall()
+    all_tables_names_local = connection.execute(
+        """
+        SELECT name FROM sqlite_master WHERE type='table';
+        """
+    ).fetchall()
+    all_imported = [
+        table[0] for table in all_tables_names_import if table[0] != "sqlite_sequence" and not str(table[0]).endswith("_tags")
+    ]
+    all_local = [
+        table[0] for table in all_tables_names_local if table[0] != "sqlite_sequence" and not str(table[0]).endswith("_tags")
+    ]
+
+    def _new_table(table_name: str):
+        """
+        Imports totally new tables with all their data.
+        """
+        connect_or_create_database(
+            table_name,
+            db_path
+        )
+        all_names = conn_temp.execute(f"SELECT name FROM {table_name}").fetchall()
+        all_desc = conn_temp.execute(f"SELECT description FROM {table_name}").fetchall()
+        all_tags = conn_temp.execute(f"SELECT element_id, tag FROM {table_name}_tags").fetchall()
+
+        tags = {i: [] for i, in all_names}
+
+        for id, tag in all_tags:
+            name = all_names[id-1][0]
+            tags[name].append(tag)
+
+        for name, desc in zip(all_names, all_desc):
+            add_to_vault(
+                table_name,
+                name[0],
+                desc[0],
+                tags[name[0]],
+                db_path
+            )
+
+    def _already_exists(table_name: str):
+        """
+        If the table already exists locally, we want to import only the ones that have different name and description.
+        """
+        imp_names = conn_temp.execute(f"SELECT name FROM {table_name}").fetchall()
+        imp_descs = conn_temp.execute(f"SELECT description FROM {table_name}").fetchall()
+        imp_tags = conn_temp.execute(f"SELECT element_id, tag FROM {table_name}_tags").fetchall()
+
+        imp_names= [name[0] for name in imp_names]
+        imp_descs = [desc[0] for desc in imp_descs]
+
+        local_names = connection.execute(f"SELECT name FROM {table_name}").fetchall()
+        local_descs = connection.execute(f"SELECT description FROM {table_name}").fetchall()
+
+        local_names = [name[0] for name in local_names]
+        local_descs = [desc[0] for desc in local_descs]
+
+        for imp_name, imp_desc in zip(imp_names, imp_descs):
+            if imp_name in local_names and imp_desc in local_descs: continue # Are the same.
+
+            # If not the same we can add them.
+            tags = {i: [] for i in imp_names}
+
+            for id, tag in imp_tags:
+                name = imp_names[id-1]
+                tags[name].append(tag)
+
+            add_to_vault(
+                table_name,
+                imp_name,
+                imp_desc,
+                tags[imp_name],
+                db_path
+            )
+    
+    for table in all_imported:
+        check_table_security(table)
+        if table in all_local: _already_exists(table)
+        else: _new_table(table)
+
+    connection.commit()
+    connection.close()
+
+def export_database(export_path: str|Path = Path.home(), db_path: Path|None = None):
+    """
+    Exports a database in the given directory.
+    """
+    if db_path == None:
+        db_path = get_full_db_path(None)
+    connection = sqlite3.connect(db_path)
+    export_path = Path(export_path)
+
+    full_exp: Path
+    if export_path.is_dir():
+        full_exp = export_path / "dump_snippetvault.db"
+    else:
+        full_exp = export_path
+
+    with open(full_exp, "w") as f:
+        for line in connection.iterdump():
+            f.write("%s\n" % line)

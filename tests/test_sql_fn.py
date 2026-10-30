@@ -16,6 +16,28 @@ def fake_db_path(tmp_path):
 def new_db(fake_db_path):
     sql_fn.connect_or_create_database("test", fake_db_path / "database.db")
 
+@pt.fixture(scope="function")
+def old_db(fake_db_path, new_db):
+    sql_fn.add_to_vault(
+        "test", "snippet test", "description test", ["python", "coding"], fake_db_path
+    )
+    sql_fn.connect_or_create_database("test2", fake_db_path / "database.db")
+    sql_fn.add_to_vault(
+        "test2", "snippet test2", "description test2", ["sh"], fake_db_path
+    )
+    sql_fn.add_to_vault(
+            "test2", "snippet test3", "description test3", ["aaah"], fake_db_path
+        )
+    sql_fn.export_database(
+        fake_db_path,
+        fake_db_path / "database.db"
+    )
+    sql_fn.delete_snippet(
+        "test2", "snippet test3", False, fake_db_path
+    )
+
+    return pl.Path(fake_db_path) / "dump_snippetvault.db"
+
 def test_check_and_create_db(fake_db_path):
     response = sql_fn.database_exists("test", fake_db_path)
     if response is False:
@@ -171,3 +193,49 @@ def test_delete_snippet(
 
     assert results == expected
     assert results_tags == expected
+
+
+def test_export_db(
+        fake_db_path,
+        new_db
+):
+    sql_fn.add_to_vault(
+        "test", "snippet test", "description test", ["python"], fake_db_path
+    )
+    sql_fn.export_database(
+        fake_db_path,
+        fake_db_path / "database.db"
+    )
+
+    full_path = pl.Path(fake_db_path) / "dump_snippetvault.db"
+    assert full_path.exists()
+
+def test_import_db(
+        fake_db_path,
+        old_db
+):
+    ## Only removing one so we check both cases.
+    sql_fn.remove_vault(
+        "test",
+        fake_db_path
+    )
+    sql_fn.import_database(
+        old_db,
+        fake_db_path
+    )
+
+    res = sql_fn.see_vault(
+        "test",
+        fake_db_path
+    )
+    res = [(name, desc, tags) for name, desc, time, tags in res]
+
+    assert res == [("snippet test", "description test", "coding"), ("snippet test", "description test", "python")]
+
+    res = sql_fn.see_vault(
+        "test2",
+        fake_db_path
+    )
+    res = [(name, desc, tags) for name, desc, time, tags in res]
+    
+    assert res == [('snippet test2', 'description test2', 'sh'), ('snippet test3', 'description test3', 'aaah')]

@@ -162,6 +162,37 @@ def remove_vault(
         raise typer.Exit(code = 1)
 
 @app.command()
+def import_database(
+    database_path: str
+):
+    """
+    Imports and replaces the existing database (if any) with the specified one.
+    """
+    try:
+        sql_fn.import_database(database_path)
+        out_console.print("Import successful.")
+
+    except (FileNotFoundError, sqlite3.Error) as e:
+        err_console.print(str(e))
+        raise typer.Exit(code = 1)
+
+@app.command()
+def export_database(
+    export_path: str|None = None
+):
+    """
+    Exports a database in the given directory.
+    If not given any path, it will dump the file into the home directory under the 'dump_snippetvault.db' filename.
+    """
+    try:
+        sql_fn.export_database(export_path)
+        out_console.print("Export successful.")
+
+    except (Exception, sqlite3.Error) as e:
+        err_console.print(str(e))
+        raise typer.Exit(code = 1)
+
+@app.command()
 def delete_snippet(
     vault_name: str,
     snippet_or_tag_name: str,
