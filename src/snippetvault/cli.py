@@ -18,6 +18,14 @@ app = typer.Typer()
 err_console = Console(stderr=True)
 out_console = Console(stderr=False)
 
+def _ask_reply(results) -> int:
+    reply: str = typer.prompt("Which index would you like to edit? [0 is the first]: ", default = "0")
+    if not reply.isdigit() or (int(reply) <= 0 and int(reply) >= len(results)):
+        out_console.print("Selected index is either not digit or in range.")
+        raise typer.Exit(code = 0)
+    
+    return int(reply)
+
 @app.command()
 def create_vault(vault_name: Annotated[str, typer.Argument()] = "standard_vault") -> None:
     """
@@ -57,7 +65,7 @@ def add_snippet(
     try:
         sql_fn.add_to_vault(vault_name, snippet_name, description, tags)
 
-    except (sql_fn.TableNameErr, sql_fn.DbNotExistent) as e:
+    except (sql_fn.TableNameErr, sql_fn.DbNotExistent, sql_fn.SameItem) as e:
         err_console.print(str(e))
         raise typer.Exit(code = 1)
 
@@ -99,7 +107,6 @@ def see_vault(
     """
     try:
         results = sql_fn.see_vault(vault_name, None, list_db_tables)
-
         if not list_db_tables:
             table = Table()
             table.add_column("Snippet Name")
@@ -112,7 +119,7 @@ def see_vault(
                     result[0],
                     result[1],
                     result[2],
-                    result[3]
+                    ",".join(result[3])
                 )
             
             out_console.print(table)
@@ -202,11 +209,65 @@ def delete_snippet(
     Removes the snippet from the vault.
     """
     try:
-        sql_fn.delete_snippet(vault_name, snippet_or_tag_name, is_tag)
+        results = sql_fn.search_in_vault(vault_name, snippet_or_tag_name, is_tag)
+        table = Table()
+        table.add_column("Index")
+        table.add_column("Snippet Name")
+        table.add_column("Description")
+        table.add_column("Tags")
+
+        idx: int = 0
+        for result in results:
+            table.add_row(str(idx), result[0], result[1], result[2])
+            idx += 1
+
+        out_console.print(table)
+        to_delete: list = results[_ask_reply(results)]
+
+        sql_fn.delete_snippet(vault_name, to_delete, is_tag)
         out_console.print("Done.")
         raise typer.Exit(code = 0)
 
     except (sql_fn.TableNameErr, sql_fn.DbNotExistent, sql_fn.NoOptions) as e:
+        err_console.print(str(e))
+        raise typer.Exit(code = 1)
+
+@app.command()
+def edit_snippet(
+    vault_name: str,
+    snippet_or_tag: str,
+    is_tag: bool = False
+):
+    """
+    Edits the snippet.
+    """
+    try:
+        results = sql_fn.search_in_vault(vault_name, snippet_or_tag, is_tag)
+        table = Table()
+        table.add_column("Index")
+        table.add_column("Snippet Name")
+        table.add_column("Description")
+        table.add_column("Tags")
+
+        idx: int = 0
+        for result in results:
+            table.add_row(str(idx), result[0], result[1], result[2])
+            idx += 1
+
+        out_console.print(table)
+
+        to_edit: list = results[_ask_reply(results)]
+        new_name: str = typer.prompt("New name for snippet (can leave empty for no changes): ", type = str, default = "")
+        new_desc: str = typer.prompt("New description for the snippet (can leave empty for no changes): ", type = str, default = "")
+        tags_to_delete: str = typer.prompt("Which tags do you want to delete (leave empty for no deletion, or separate with commas multiple tags): ", type = str, default = "")
+        tags_to_add: str = typer.prompt("Which tags do you want to add (leave empty for no addition, or separate with commas for multiple tags): ", type = str, default = "")
+
+        sql_fn.edit_snippet(
+            vault_name, to_edit, new_name, new_desc, tags_to_delete, tags_to_add
+        )
+        out_console.print("Snippet edited successfully.")
+
+    except (sqlite3.Error, sql_fn.EditError, Exception) as e:
         err_console.print(str(e))
         raise typer.Exit(code = 1)
 

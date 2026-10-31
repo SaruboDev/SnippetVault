@@ -15,6 +15,12 @@ class DbNotExistent(Exception):
 class NoOptions(Exception):
     pass
 
+class SameItem(Exception):
+    pass
+
+class EditError(Exception):
+    pass
+
 def check_table_security(name: str) -> bool:
     """
     Quick regex filter.
@@ -23,6 +29,23 @@ def check_table_security(name: str) -> bool:
     if not re.match("^[a-zA-Z0-9_]+$", name):
         raise TableNameErr("Table name not valid or unsafe!")
     return True
+
+def check_if_dupe(
+        vault_name: str,
+        snippet_name: str,
+        description: str,
+        db_path: Path|None = None
+):
+    """
+    Checks if a snippet name and description already exists.
+    """
+    connection: Connection = connect_or_create_database(vault_name, db_path)
+    check = search_in_vault(vault_name, snippet_name, False, db_path)
+    if check:
+        for item in check:
+            if not item or (item[0] == snippet_name and item[1] == description):
+                connection.close()
+                raise SameItem("Cannot have duplicated snippets!")
 
 def connect_or_create_database(name: str, db_path: Path|None = None) -> Connection:
     """
@@ -111,6 +134,8 @@ def add_to_vault(
     cur: Cursor = connection.cursor()
     cur.execute("PRAGMA foreign_keys = ON;")
 
+    check_if_dupe(vault_name, snippet_name, description, db_path)
+
     cur.execute(f"INSERT INTO {vault_name} (name, description) VALUES(?, ?)", (snippet_name, description))
     last_id = cur.lastrowid
 
@@ -121,7 +146,6 @@ def add_to_vault(
 
     connection.commit()
     connection.close()
-    return
 
 def search_in_vault(
         vault_name: str,
@@ -146,15 +170,16 @@ def search_in_vault(
         cur.execute("PRAGMA foreign_keys = ON;")
 
         cur.execute(f"""
-        SELECT t.name, t.description, ts.tag FROM "{vault_name}" AS t
+        SELECT t.name, t.description, GROUP_CONCAT(ts.tag) FROM "{vault_name}" AS t
         LEFT JOIN "{vault_name}_tags" AS ts ON t.id = ts.element_id
-        WHERE t.name = ?;
+        WHERE t.name = ?
+        GROUP BY t.id;
         """, (snippet_or_tag, )
         )
         results = cur.fetchall()
-
         connection.close()
 
+        if results and results[0][0] is None: return None
         return results
 
     # Else, they're searching by tags
@@ -195,15 +220,24 @@ def see_vault(vault_name: str|None, db_path: Path|None = None, list_db_tables: b
     cur = connection.cursor()
     cur.execute("PRAGMA foreign_keys = ON;")
 
+    all_snippets = []
     if not list_db_tables:
-        cur.execute(f"SELECT vn.name, vn.description, vn.timedate, st.tag FROM {vault_name} AS vn LEFT JOIN {vault_name}_tags AS st ON vn.id == st.element_id;")
+        cur.execute(f"""
+        SELECT vn.name, vn.description, vn.timedate, GROUP_CONCAT(st.tag) FROM {vault_name} AS vn
+        LEFT JOIN {vault_name}_tags AS st ON vn.id == st.element_id
+        GROUP BY vn.id;
+        """)
+        result = cur.fetchall()
+        for row in result:
+            name, desc, timedate, tags = row
+            tag_list = tags.split(",") if tags else []
+            all_snippets.append([name, desc, timedate, tag_list])
     else:
         cur.execute(f"SELECT name FROM sqlite_master WHERE type='table';")
-    
-    result = cur.fetchall()
-    connection.close()
+        all_snippets = cur.fetchall()
 
-    return result
+    connection.close()
+    return all_snippets
 
 def remove_vault(
         vault_name: str,
@@ -264,17 +298,77 @@ def delete_snippet(vault_name: str, snippet_or_tag_name: str, is_tag: bool = Fal
     if not is_tag:
         cur.execute(
             f"""
-            DELETE FROM {vault_name} WHERE name == ?;
-            """, (snippet_or_tag_name, )
+            DELETE FROM {vault_name} WHERE name == ? AND description == ?;
+            """, (snippet_or_tag_name[0], snippet_or_tag_name[1])
         )
     else:
         cur.execute(
             f"""
             DELETE FROM {vault_name} WHERE id IN (
-                SELECT element_id FROM {vault_name}_tags WHERE tag = ?
-            )
-            """, (snippet_or_tag_name,)
+                SELECT element_id FROM {vault_name}_tags WHERE tag = ? AND name == ? AND description == ?
+            );
+            """, (snippet_or_tag_name[2], snippet_or_tag_name[0], snippet_or_tag_name[1])
         )
+
+    connection.commit()
+    connection.close()
+
+def edit_snippet(vault_name: str, to_edit: list, new_name: str = "", new_desc: str = "",  tags_to_delete: str = "", tags_to_add: str = "", db_path: Path|None = None):
+    """
+    Edits the snippet, only changes the non-empty values of 'new_name' or 'new_desc'.
+    """
+    connection = connect_or_create_database(vault_name, db_path)
+    connection.execute("PRAGMA foreign_keys = ON;")
+
+    ## Checks if it WOULD become a dupe.
+    if new_name and new_desc:
+        check_if_dupe(vault_name, new_name, new_desc, db_path)
+    ## Grabs the last id of the to_edit snippet.
+    last_id = connection.execute(f"SELECT id FROM {vault_name} WHERE name == ? and description == ?;", (to_edit[0], to_edit[1])).fetchone()[0]
+    if not last_id: raise ValueError("No id found, cannot edit snippet.")
+
+    if new_name:
+        connection.execute(
+            f"""
+            UPDATE {vault_name}
+            SET name = ?
+            WHERE id == ?;
+            """, (new_name, last_id)
+        )
+    if new_desc:
+        connection.execute(
+            f"""
+            UPDATE {vault_name}
+            SET description = ?
+            WHERE id == ?;
+            """, (new_desc, last_id)
+        )
+
+    if tags_to_delete:
+        tags_to_delete = [tag.strip() for tag in tags_to_delete.split(",")]
+        tag_count: int = connection.execute(f"SELECT COUNT(*) FROM {vault_name}_tags WHERE element_id == ?;", (last_id, )).fetchone()[0]
+        to_add: int = 0
+        if tags_to_add:
+            to_add = len(tags_to_add)
+        tags_left: int = tag_count - len(tags_to_delete) + to_add
+
+        if tags_left > 0:
+            for tag in tags_to_delete:
+                connection.execute(
+                    f"""
+                    DELETE FROM {vault_name}_tags
+                    WHERE element_id == ? AND tag == ?;
+                    """, (last_id, tag)
+                ) 
+        else:
+            raise EditError("Cannot proceed adding or deleting tags because no snippets can have 0 tags.")
+
+    if tags_to_add:
+        tags_to_add = [tag.strip() for tag in tags_to_add.split(",")]
+        for tag in tags_to_add:
+            connection.execute(
+                f"INSERT OR IGNORE INTO '{vault_name}_tags' (element_id, tag) VALUES (?, ?)", (last_id, tag)
+            )
 
     connection.commit()
     connection.close()
@@ -289,6 +383,9 @@ def import_database(database_path: str|Path, db_path: str|Path|None = None):
 
     connection = sqlite3.connect(db_path)
     conn_temp = sqlite3.connect(":memory:")
+
+    connection.execute("PRAGMA foreign_keys = ON;")
+    conn_temp.execute("PRAGMA foreign_keys = ON;")
 
     with open(database_path, "r") as f:
         sql = f.read()
@@ -388,6 +485,7 @@ def export_database(export_path: str|Path = Path.home(), db_path: Path|None = No
     if db_path == None:
         db_path = get_full_db_path(None)
     connection = sqlite3.connect(db_path)
+    connection.execute("PRAGMA foreign_keys = ON;")
     export_path = Path(export_path)
 
     full_exp: Path

@@ -5,6 +5,7 @@ import pytest as pt
 import pathlib as pl
 
 from sqlite3 import Connection
+import json
 
 @pt.fixture(scope="function")
 def fake_db_path(tmp_path):
@@ -67,7 +68,7 @@ def test_search_in_vault(fake_db_path, new_db):
         "test",
         "snippet test",
         "description test",
-        ["test_tag"],
+        ["test_tag", "secondary_tag"],
         fake_db_path
     )
     sql_fn.add_to_vault(
@@ -90,14 +91,18 @@ def test_search_in_vault(fake_db_path, new_db):
         True,
         fake_db_path
     )
+    for item in no_tag_res:
+        noname, nodesc, notags = item
+        assert noname == "snippet test"
+        assert nodesc == "description test"
+        assert notags == "secondary_tag,test_tag"
 
-    assert no_tag_res == [("snippet test", "description test", "test_tag")]
     assert yes_tag_res == [("snippet test", "description test", "test_tag"), ("snippet test 2", "description test", "test_tag")]
 
 @pt.mark.parametrize(
         "vault_name, list_db_tables, expected",
         [
-            ("test", False, [("snippet test", "description test", ANY, "test_tag")]),
+            ("test", False, [["snippet test", "description test", ANY, ["test_tag"]]]),
             (None, True, [("test",), ("sqlite_sequence",), ("test_tags",)]),
             ("test", True, [("test",), ("sqlite_sequence",), ("test_tags",)])
         ]
@@ -154,8 +159,8 @@ def test_delete_table(
 @pt.mark.parametrize(
         "is_tag, snippet_or_tag_name, expected",
         [
-            (False, "snippet test", []),
-            (True, "test_tag", [])
+            (False, ["snippet test", "description test", ""], []),
+            (True, ["snippet test", "description test", "test_tag"], [])
         ]
 )
 def test_delete_snippet(
@@ -230,7 +235,7 @@ def test_import_db(
     )
     res = [(name, desc, tags) for name, desc, time, tags in res]
 
-    assert res == [("snippet test", "description test", "coding"), ("snippet test", "description test", "python")]
+    assert res == [("snippet test", "description test", ["coding", "python"])]
 
     res = sql_fn.see_vault(
         "test2",
@@ -238,4 +243,82 @@ def test_import_db(
     )
     res = [(name, desc, tags) for name, desc, time, tags in res]
     
-    assert res == [('snippet test2', 'description test2', 'sh'), ('snippet test3', 'description test3', 'aaah')]
+    assert res == [('snippet test2', 'description test2', ['sh']), ('snippet test3', 'description test3', ['aaah'])]
+
+
+@pt.mark.parametrize(
+        "to_edit, new_name, new_desc, tags_to_delete, tags_to_add",
+        [
+            (
+                ["testname", "description test", "python,super,mega"],
+                "newname", "new desc", "", ""
+            ),
+            (
+                ["testname", "description test", "python,super,mega"],
+                "", "", "python, super", "coding, language"
+            )
+        ]
+)
+def test_edit_snipped(
+    fake_db_path,
+    new_db,
+    to_edit,
+    new_name,
+    new_desc,
+    tags_to_delete,
+    tags_to_add
+):
+    sql_fn.add_to_vault(
+        "test", "testname", "description test", ["python", "super", "mega"], fake_db_path
+    )
+    sql_fn.edit_snippet(
+        "test", to_edit, new_name, new_desc, tags_to_delete, tags_to_add, fake_db_path
+    )
+
+    if new_name: # This is for the name and description edit test.
+        res = sql_fn.search_in_vault(
+            "test",
+            new_name,
+            False,
+            fake_db_path
+        )
+        assert res == [('newname', 'new desc', 'mega,python,super')]
+    else: # This is for the tags edit test.
+        res = sql_fn.search_in_vault(
+            "test",
+            "testname",
+            False,
+            fake_db_path
+        )
+        assert res == [('testname', 'description test', 'coding,language,mega')]
+
+def test_no_tags(
+        fake_db_path,
+        new_db
+):
+    sql_fn.add_to_vault(
+        "test", "testname", "description test", ["python", "super", "mega"], fake_db_path
+    )
+
+    try:
+        sql_fn.edit_snippet(
+            "test", ["testname", "description test", "python,super,mega"], "", "", "python, super, mega", "", fake_db_path
+        )
+        assert False
+    except sql_fn.EditError:
+        assert True
+
+def test_dupe(
+        fake_db_path,
+        new_db
+):
+    sql_fn.add_to_vault(
+        "test", "testname", "description test", ["python", "super", "mega"], fake_db_path
+    )
+    try:
+        sql_fn.add_to_vault(
+            "test", "testname", "description test", ["python", "super", "mega"], fake_db_path
+        )
+        assert False
+    except sql_fn.SameItem:
+        assert True
