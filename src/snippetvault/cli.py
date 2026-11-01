@@ -34,7 +34,7 @@ def create_vault(vault_name: Annotated[str, typer.Argument()] = "standard_vault"
     try:
         if sql_fn.database_exists(vault_name) == False:
             out_console.print(
-                f"Database [bold #687396]{vault_name} [/bold #687396] doesn't exist."
+                f"Vault [bold #687396]{vault_name} [/bold #687396] doesn't exist."
             )
 
             reply: bool = typer.confirm("Want to create a new one?")
@@ -102,8 +102,8 @@ def see_vault(
     list_db_tables: bool = False
 ):
     """
-    Let's you see every note in the specified vault.
-    If you don't specify a vault but insert '--list-db-tables' it will list all avaiable vaults in the database.
+    Lets you see every note in the specified vault.
+    If you don't specify a vault but insert '--list-db-tables' it will list all available vaults in the database.
     """
     try:
         results = sql_fn.see_vault(vault_name, None, list_db_tables)
@@ -173,7 +173,7 @@ def import_database(
     database_path: str
 ):
     """
-    Imports and replaces the existing database (if any) with the specified one.
+    Imports tables or adds snippets (if imported tables have the same name as local ones) to the existing database (if any) with the specified one.
     """
     try:
         sql_fn.import_database(database_path)

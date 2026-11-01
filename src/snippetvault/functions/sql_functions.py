@@ -79,8 +79,8 @@ def get_full_db_path(db_path: Path|None = None):
 
         db_path = Path(result)
 
-    if not str(db_path).endswith("database.db"):
-        db_path_full = db_path / "database.db"
+    if not str(db_path).endswith("snippetvault.db"):
+        db_path_full = db_path / "snippetvault.db"
     else:
         db_path_full = db_path
 
@@ -207,7 +207,7 @@ def see_vault(vault_name: str|None, db_path: Path|None = None, list_db_tables: b
     """
 
     if vault_name is None and list_db_tables == False:
-        raise NoOptions("Didn't receive neither a vault-name nor is list-db-tables enabled.")
+        raise NoOptions("You need to provide a vault-name or use --list-db-tables.")
 
     if vault_name:
         if not database_exists(vault_name, db_path):

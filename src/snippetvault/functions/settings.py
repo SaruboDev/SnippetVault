@@ -143,10 +143,10 @@ def change_settings(value: Any, key_name: str|None = None, file_path: Path|None 
     file_path_settings.write_text(dumps(doc), encoding = "utf-8")
 
     if old_path is not None:
-        if (old_path / "database.db").exists():
+        if (old_path / "snippetvault.db").exists():
             try:
-                old_path_complete: Path = old_path / "database.db"
-                new_path_complete: Path = Path(value) / "database.db"
+                old_path_complete: Path = old_path / "snippetvault.db"
+                new_path_complete: Path = Path(value) / "snippetvault.db"
                 new_path_complete.parent.mkdir(parents=True, exist_ok=True)
                 old_path_complete.replace(new_path_complete)
 
