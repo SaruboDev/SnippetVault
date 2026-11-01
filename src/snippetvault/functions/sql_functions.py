@@ -52,6 +52,7 @@ def connect_or_create_database(name: str, db_path: Path|None = None) -> Connecti
     Creates a new database and the tables required or connects to an existing one.    
     """
     full_path = get_full_db_path(db_path)
+    full_path.parent.mkdir(parents = True, exist_ok = True)
 
     connection: Connection = sqlite3.connect(full_path)
     cur: Cursor = connection.cursor()
