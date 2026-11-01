@@ -120,6 +120,7 @@ name = "snippetvault"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "rich" },
     { name = "tomlkit" },
     { name = "typer" },
 ]
@@ -131,6 +132,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "rich", specifier = ">=15.0.0" },
     { name = "tomlkit", specifier = ">=0.15.1" },
     { name = "typer", specifier = ">=0.27.0" },
 ]
