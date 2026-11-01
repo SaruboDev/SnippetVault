@@ -222,8 +222,11 @@ def delete_snippet(
             idx += 1
 
         out_console.print(table)
-        to_delete: list = results[_ask_reply(results)]
+        if not results:
+            out_console.print(f"No result for {snippet_or_tag_name}.")
+            raise typer.Exit(code = 0)
 
+        to_delete: list = results[_ask_reply(results)]
         sql_fn.delete_snippet(vault_name, to_delete, is_tag)
         out_console.print("Done.")
         raise typer.Exit(code = 0)
@@ -255,6 +258,9 @@ def edit_snippet(
             idx += 1
 
         out_console.print(table)
+        if not results:
+            out_console.print(f"No result for {snippet_or_tag}.")
+            raise typer.Exit(code = 0)
 
         to_edit: list = results[_ask_reply(results)]
         new_name: str = typer.prompt("New name for snippet (can leave empty for no changes): ", type = str, default = "")

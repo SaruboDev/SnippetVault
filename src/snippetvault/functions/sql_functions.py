@@ -318,60 +318,66 @@ def edit_snippet(vault_name: str, to_edit: list, new_name: str = "", new_desc: s
     Edits the snippet, only changes the non-empty values of 'new_name' or 'new_desc'.
     """
     connection = connect_or_create_database(vault_name, db_path)
-    connection.execute("PRAGMA foreign_keys = ON;")
+    try:
+        connection.execute("PRAGMA foreign_keys = ON;")
 
-    ## Checks if it WOULD become a dupe.
-    if new_name and new_desc:
-        check_if_dupe(vault_name, new_name, new_desc, db_path)
-    ## Grabs the last id of the to_edit snippet.
-    last_id = connection.execute(f"SELECT id FROM {vault_name} WHERE name == ? and description == ?;", (to_edit[0], to_edit[1])).fetchone()[0]
-    if not last_id: raise ValueError("No id found, cannot edit snippet.")
+        final_name = new_name or to_edit[0]
+        final_desc = new_desc or to_edit[1]
 
-    if new_name:
-        connection.execute(
-            f"""
-            UPDATE {vault_name}
-            SET name = ?
-            WHERE id == ?;
-            """, (new_name, last_id)
-        )
-    if new_desc:
-        connection.execute(
-            f"""
-            UPDATE {vault_name}
-            SET description = ?
-            WHERE id == ?;
-            """, (new_desc, last_id)
-        )
+        ## Checks if it WOULD become a dupe.
+        if (final_name, final_desc) != (to_edit[0], to_edit[1]):
+            check_if_dupe(vault_name, final_name, final_desc, db_path)
+        ## Grabs the last id of the to_edit snippet.
+        last_id = connection.execute(f"SELECT id FROM {vault_name} WHERE name == ? and description == ?;", (to_edit[0], to_edit[1])).fetchone()
+        if last_id: last_id = last_id[0]
+        if not last_id: raise ValueError("No id found, cannot edit snippet.")
 
-    if tags_to_delete:
-        tags_to_delete = [tag.strip() for tag in tags_to_delete.split(",")]
-        tag_count: int = connection.execute(f"SELECT COUNT(*) FROM {vault_name}_tags WHERE element_id == ?;", (last_id, )).fetchone()[0]
-        to_add: int = 0
-        if tags_to_add:
-            to_add = len(tags_to_add)
-        tags_left: int = tag_count - len(tags_to_delete) + to_add
+        if new_name:
+            connection.execute(
+                f"""
+                UPDATE {vault_name}
+                SET name = ?
+                WHERE id == ?;
+                """, (new_name, last_id)
+            )
+        if new_desc:
+            connection.execute(
+                f"""
+                UPDATE {vault_name}
+                SET description = ?
+                WHERE id == ?;
+                """, (new_desc, last_id)
+            )
+        tags_to_add = [tag.strip() for tag in tags_to_add.split(",") if tag.strip()]
+        if tags_to_delete:
+            tags_to_delete = [tag.strip() for tag in tags_to_delete.split(",") if tag.strip()]
+            existing = {t[0] for t in connection.execute(f"SELECT tag FROM {vault_name}_tags WHERE element_id == ?;", (last_id,))}
+            remaining = (existing - set(tags_to_delete)) | set(tags_to_add)
+            if not remaining:
+                raise EditError("Cannot proceed adding or deleting tags because no snippets can have 0 tags.")
+            # tag_count: int = connection.execute(f"SELECT COUNT(*) FROM {vault_name}_tags WHERE element_id == ?;", (last_id, )).fetchone()[0]
+            # to_add: int = 0
+            # if tags_to_add:
+            #     to_add = len(tags_to_add)
+            # tags_left: int = tag_count - len(tags_to_delete) + to_add
 
-        if tags_left > 0:
             for tag in tags_to_delete:
                 connection.execute(
                     f"""
                     DELETE FROM {vault_name}_tags
                     WHERE element_id == ? AND tag == ?;
                     """, (last_id, tag)
-                ) 
-        else:
-            raise EditError("Cannot proceed adding or deleting tags because no snippets can have 0 tags.")
+                )
 
-    if tags_to_add:
-        tags_to_add = [tag.strip() for tag in tags_to_add.split(",")]
-        for tag in tags_to_add:
-            connection.execute(
-                f"INSERT OR IGNORE INTO '{vault_name}_tags' (element_id, tag) VALUES (?, ?)", (last_id, tag)
-            )
+        if tags_to_add:
+            for tag in tags_to_add:
+                connection.execute(
+                    f"INSERT OR IGNORE INTO '{vault_name}_tags' (element_id, tag) VALUES (?, ?)", (last_id, tag)
+                )
 
-    connection.commit()
-    connection.close()
+        connection.commit()
+    finally:
+        connection.close()
 
 def import_database(database_path: str|Path, db_path: str|Path|None = None):
     """
@@ -380,103 +386,58 @@ def import_database(database_path: str|Path, db_path: str|Path|None = None):
     db_path = get_full_db_path(db_path)
     database_path = Path(database_path)
     if not database_path.is_file() or database_path.suffix != ".db": raise FileNotFoundError("'database_path' doesn't return the correct file.")
-
-    connection = sqlite3.connect(db_path)
     conn_temp = sqlite3.connect(":memory:")
+    try:
+        conn_temp.execute("PRAGMA foreign_keys = ON;")
 
-    connection.execute("PRAGMA foreign_keys = ON;")
-    conn_temp.execute("PRAGMA foreign_keys = ON;")
+        with open(database_path, "r", encoding = "utf-8") as f:
+            sql = f.read()
+            conn_temp.executescript(sql)
 
-    with open(database_path, "r") as f:
-        sql = f.read()
-        conn_temp.executescript(sql)
+        all_tables_names_import = conn_temp.execute(
+            """
+            SELECT name FROM sqlite_master WHERE type='table';
+            """
+        ).fetchall()
+        all_imported = [
+            table[0] for table in all_tables_names_import if table[0] != "sqlite_sequence" and not str(table[0]).endswith("_tags")
+        ]
 
-    all_tables_names_import = conn_temp.execute(
-        """
-        SELECT name FROM sqlite_master WHERE type='table';
-        """
-    ).fetchall()
-    all_tables_names_local = connection.execute(
-        """
-        SELECT name FROM sqlite_master WHERE type='table';
-        """
-    ).fetchall()
-    all_imported = [
-        table[0] for table in all_tables_names_import if table[0] != "sqlite_sequence" and not str(table[0]).endswith("_tags")
-    ]
-    all_local = [
-        table[0] for table in all_tables_names_local if table[0] != "sqlite_sequence" and not str(table[0]).endswith("_tags")
-    ]
-
-    def _new_table(table_name: str):
-        """
-        Imports totally new tables with all their data.
-        """
-        connect_or_create_database(
-            table_name,
-            db_path
-        )
-        all_names = conn_temp.execute(f"SELECT name FROM {table_name}").fetchall()
-        all_desc = conn_temp.execute(f"SELECT description FROM {table_name}").fetchall()
-        all_tags = conn_temp.execute(f"SELECT element_id, tag FROM {table_name}_tags").fetchall()
-
-        tags = {i: [] for i, in all_names}
-
-        for id, tag in all_tags:
-            name = all_names[id-1][0]
-            tags[name].append(tag)
-
-        for name, desc in zip(all_names, all_desc):
-            add_to_vault(
+        def _import_table(table_name: str):
+            """
+            Imports totally new tables with all their data.
+            """
+            connect_or_create_database(
                 table_name,
-                name[0],
-                desc[0],
-                tags[name[0]],
                 db_path
             )
 
-    def _already_exists(table_name: str):
-        """
-        If the table already exists locally, we want to import only the ones that have different name and description.
-        """
-        imp_names = conn_temp.execute(f"SELECT name FROM {table_name}").fetchall()
-        imp_descs = conn_temp.execute(f"SELECT description FROM {table_name}").fetchall()
-        imp_tags = conn_temp.execute(f"SELECT element_id, tag FROM {table_name}_tags").fetchall()
+            query = f"""
+            SELECT t.id, t.name, t.description, GROUP_CONCAT(tg.tag) FROM {table_name} AS t
+            LEFT JOIN {table_name}_tags AS tg ON t.id == tg.element_id
+            GROUP BY t.id;
+            """
+            all_db = conn_temp.execute(query).fetchall()
+            for sid, name, desc, tag in all_db:
+                tag_list: list = tag.split(",") if tag else []
+                try:
+                    add_to_vault(
+                        table_name,
+                        name,
+                        desc,
+                        tag_list,
+                        db_path
+                    )
+                except SameItem:
+                    continue
 
-        imp_names= [name[0] for name in imp_names]
-        imp_descs = [desc[0] for desc in imp_descs]
+        for table in all_imported:
+            check_table_security(table)
 
-        local_names = connection.execute(f"SELECT name FROM {table_name}").fetchall()
-        local_descs = connection.execute(f"SELECT description FROM {table_name}").fetchall()
-
-        local_names = [name[0] for name in local_names]
-        local_descs = [desc[0] for desc in local_descs]
-
-        for imp_name, imp_desc in zip(imp_names, imp_descs):
-            if imp_name in local_names and imp_desc in local_descs: continue # Are the same.
-
-            # If not the same we can add them.
-            tags = {i: [] for i in imp_names}
-
-            for id, tag in imp_tags:
-                name = imp_names[id-1]
-                tags[name].append(tag)
-
-            add_to_vault(
-                table_name,
-                imp_name,
-                imp_desc,
-                tags[imp_name],
-                db_path
-            )
-    
-    for table in all_imported:
-        check_table_security(table)
-        if table in all_local: _already_exists(table)
-        else: _new_table(table)
-
-    connection.commit()
-    connection.close()
+        for table in all_imported:
+            _import_table(table)
+    finally:
+        conn_temp.close()
 
 def export_database(export_path: str|Path = Path.home(), db_path: Path|None = None):
     """
@@ -494,6 +455,6 @@ def export_database(export_path: str|Path = Path.home(), db_path: Path|None = No
     else:
         full_exp = export_path
 
-    with open(full_exp, "w") as f:
+    with open(full_exp, "w", encoding = "utf-8") as f:
         for line in connection.iterdump():
             f.write("%s\n" % line)
