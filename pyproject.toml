@@ -1,8 +1,10 @@
 [project]
 name = "snippetvault"
-version = "0.8.0"
+version = "1.0.0"
 description = "A CLI tool to store your thoughts and notes."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "SaruboDev", email = "SaruboDev@users.noreply.github.com" }
 ]
@@ -27,3 +29,7 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.1.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/SaruboDev/SnippetVault"
+Issues = "https://github.com/SaruboDev/SnippetVault/issues"
