@@ -22,7 +22,19 @@ Made in python with SQLite.
 - `UV` used for blazing-fast package manager!
 
 ## I want to try!
-It's still a WIP, but you can try it by:
+You can use the release build by:
+### Install directly from github.
+1. Open your terminal and use:
+- If you use pip: `pip install https://github.com/SaruboDev/SnippetVault/releases/download/v1.0.0/snippetvault-1.0.0-py3-none-any.whl` (or any other link to the version you'd like, 1.0.0 is a placeholder for whatever version will be in the future!)
+- If you use uv: `uv pip install same_link_here` or `uv tool install same_link_here`
+2. Done!
+### Download the files locally.
+1. Download the release you wish to use (the .whl file is enough, but if you have any error you can use the .tar.gz one).
+2. Open your terminal and use:
+- If you use pip: `pip install path_to_the_download_file`
+- If you use uv: `uv pip install path_to_the_download_file` or `uv tool install path_to_the_download_file`
+3. Done!
+### Try the main WIP repo with:
 1. Clone the repository: `git clone https://github.com/SaruboDev/SnippetVault`
 2. With your terminal, go in the root folder of the project.
 3. Sync the dependencies: `uv sync`
@@ -43,7 +55,7 @@ uv run snippetvault see-vault custom-vault-name
 ```
 ## Future Updates
 If you want to suggest more features or tell me about bugs/other, feel free to open pull requests or issues!
-- [ ] Turn it into a downloadable package for pip or as an installer.
+- [X] Turn it into a downloadable package for pip or as an installer.
 - [X] Add name and tags search.
 - [x] Add possibility to remove a snippet.
 - [x] Add possibility to remove a vault.
