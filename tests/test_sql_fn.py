@@ -15,14 +15,14 @@ def fake_db_path(tmp_path):
 
 @pt.fixture()
 def new_db(fake_db_path):
-    sql_fn.connect_or_create_database("test", fake_db_path / "database.db")
+    sql_fn.connect_or_create_database("test", fake_db_path / "snippetvault.db")
 
 @pt.fixture(scope="function")
 def old_db(fake_db_path, new_db):
     sql_fn.add_to_vault(
         "test", "snippet test", "description test", ["python", "coding"], fake_db_path
     )
-    sql_fn.connect_or_create_database("test2", fake_db_path / "database.db")
+    sql_fn.connect_or_create_database("test2", fake_db_path / "snippetvault.db")
     sql_fn.add_to_vault(
         "test2", "snippet test2", "description test2", ["sh"], fake_db_path
     )
@@ -31,7 +31,7 @@ def old_db(fake_db_path, new_db):
         )
     sql_fn.export_database(
         fake_db_path,
-        fake_db_path / "database.db"
+        fake_db_path / "snippetvault.db"
     )
     sql_fn.delete_snippet(
         "test2", "snippet test3", False, fake_db_path
@@ -46,7 +46,7 @@ def test_check_and_create_db(fake_db_path):
 
     assert isinstance(reply, Connection)
 
-    assert pl.Path(fake_db_path / "database.db").exists()
+    assert pl.Path(fake_db_path / "snippetvault.db").exists()
     reply.close()
 
 def test_add_snippet(fake_db_path, new_db):
@@ -209,7 +209,7 @@ def test_export_db(
     )
     sql_fn.export_database(
         fake_db_path,
-        fake_db_path / "database.db"
+        fake_db_path / "snippetvault.db"
     )
 
     full_path = pl.Path(fake_db_path) / "dump_snippetvault.db"
