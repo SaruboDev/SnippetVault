@@ -8,14 +8,11 @@ license-files = ["LICENSE"]
 authors = [
     { name = "SaruboDev", email = "SaruboDev@users.noreply.github.com" }
 ]
-requires-python = ">=3.14.3"
+requires-python = ">=3.14"
 dependencies = [
     "tomlkit>=0.15.1",
-]
-
-[project.optional-dependencies]
-cli = [
-    "typer>=0.27.0"
+    "typer>=0.27.0",
+    "rich>=15.0.0",
 ]
 
 [project.scripts]
